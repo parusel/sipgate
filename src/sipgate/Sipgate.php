@@ -1,89 +1,148 @@
 <?php
 
-define('SIPGATE_USER', 'xxxxxx'); // Credential to access sipgate.
-define('SIPGATE_PASS', 'xxxxxx'); // Same as login for webpage. Not the sipid for phone calls
-
-// API endpoint for Sipgate Team
-define('SIPGATE_XMLRPC_URL', 'https://api.sipgate.net:443/RPC2');
-define('SIPGATE_REST_URL', 'https://api.sipgate.net:443/my/');
-
-// API endpoint for Sipgate Basic and Sipgate Plus
-define('SIPGATE_XMLRPC_URL', 'https://api.sipgate.net:443/RPC2');
-define('SIPGATE_REST_URL', 'https://api.sipgate.net:443/my/');
-
-class Sipgate
+/**
+ * This class is a wrapper for the Sipgate API
+ */
+class SipgateApi
 {
-	
-	private function sendRestRequest($method, $options = array(), $request = 'GET')
-	{
-		$ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, SIPGATE_REST_URL . $method . '/?' . http_build_query($options) );
+
+    /**
+     * Stores the user (email)
+     */
+    protected $user;
+
+    /**
+     * Stores the users password
+     */
+    protected $password;
+
+    /**
+     * Stores the users id ('my' as default)
+     */
+    protected $user_id;
+
+    /**
+     * Constructor. Save credentials on initialization.
+     */
+    public function __construct($user, $password, $user_id = 'my')
+    {
+        $this->user = $user;
+        $this->password = $password;
+        $this->user_id = $user_id;
+    }
+
+    /**
+     * Send REST Request to the API
+     *
+     * @param string    Method
+     * @param array     Options
+     * @param string    Request type (GET, POST, ...)
+     */
+    private function sendRestRequest($method, $options = array(), $request = 'GET')
+    {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, 'https://api.sipgate.net:443/' . $this->user_id . '/' . $method . '/?' . http_build_query($options) );
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $request);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_USERPWD, SIPGATE_USER . ":" . SIPGATE_PASS);
+        curl_setopt($ch, CURLOPT_USERPWD, $this->user . ":" . $this->password);
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
 
         $output = curl_exec($ch);
         $info = curl_getinfo($ch);
         curl_close($ch);
-        return (array(
-            'info' => $info,
-            'output' => $output));
-	}
+        return (object) array('info' => $info,'output' => $output);
+    }
 
-	public function rest_balance()
-	{
-		return $this->sendRestRequest('billing/balance', array('version' => '2.37.0', 'complexity' => 'full'));
-	}
-	
-	public function rest_call_events()
-	{
-		return $this->sendRestRequest('events/calls', array('version' => '2.37.0', 'complexity' => 'full'));
-	}
-	
-	public function rest_session_calls()
-	{
-		return $this->sendRestRequest('sessions/calls', array('version' => '2.37.0', 'complexity' => 'full'));
-	}
-	
-	public function rest_record_call($session_id)
-	{
-		return $this->sendRestRequest('sessions/calls/' . $session_id . '/recording', array('version' => '2.37.0', 'complexity' => 'full'),'PUT');
-	}
-	
+    /**
+     * Get the current account balance
+     */
+    public function restBalance()
+    {
+        return $this->sendRestRequest('billing/balance', array('version' => '2.41.0', 'complexity' => 'full'));
+    }
+    
+    /**
+     * Returns a list of call events
+     */
+    public function restCallEvents()
+    {
+        return $this->sendRestRequest('events/calls', array('version' => '2.41.0', 'complexity' => 'full'));
+    }
+    
+    /**
+     * Returns a list of fax events
+     */
+    public function restFaxEvents()
+    {
+        return $this->sendRestRequest('events/faxes', array('version' => '2.41.0', 'complexity' => 'full'));
+    }
+    
+    /**
+     * Returns a list of voicemail events
+     */
+    public function restVoicemailEvents()
+    {
+        return $this->sendRestRequest('events/voicemails', array('version' => '2.41.0', 'complexity' => 'full'));
+    }
+    
+    /**
+     * Returns a list of call sessions
+     */
+    public function restSessionCalls()
+    {
+        return $this->sendRestRequest('sessions/calls', array('version' => '2.41.0', 'complexity' => 'full'));
+    }
+    
+    /**
+     * Starts the recording of a call
+     */
+    public function restRecordCall($session_id)
+    {
+        return $this->sendRestRequest('sessions/calls/' . $session_id . '/recording', array('version' => '2.41.0', 'complexity' => 'full'),'PUT');
+    }
+    
+    /**
+     * Send an XMLRPC request to the API
+     *
+     * @param string    Method
+     * @param array     Options
+     */
     private function sendXmlrpcRequest($method, $options = array())
     {
         if (!function_exists('xmlrpc_encode_request')) {
-            die('install xmlrpc extension for php5.');
+            throw new Exception('XMLRPC extension not found.');
         }
 
         $request_options = array('encoding' => 'UTF-8');
         $xmlrpc = xmlrpc_encode_request($method, $options, $request_options);
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, SIPGATE_XMLRPC_URL);
+        curl_setopt($ch, CURLOPT_URL, 'https://api.sipgate.net:443/RPC2');
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_USERPWD, SIPGATE_USER . ":" . SIPGATE_PASS);
+        curl_setopt($ch, CURLOPT_USERPWD, $this->user . ":" . $this->password);
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-Type: text/xml"));
         curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlrpc);
 
-        $output = curl_exec($ch);
+        $response = curl_exec($ch);
         $info = curl_getinfo($ch);
         curl_close($ch);
-        return (array(
-            'info' => $info,
-            'output' => $output,
-            'request' => $xmlrpc));
+
+        return $response;
     }
 
-
-    public function send_sms($remote, $message)
+    /**
+     * Sends an SMS
+     *
+     * @param string    Remote number
+     * @param string    Message
+     */
+    public function sendSms($remote, $message)
     {
         $options = array();
         $options['RemoteUri'] = 'sip:' . $remote . '@sipgate.net';
@@ -93,78 +152,155 @@ class Sipgate
         return $this->sendXmlrpcRequest('samurai.SessionInitiate', $options);
     }
 
-    public function get_balance()
+    /**
+     * Sends a fax
+     *
+     * @param string    Remote number
+     * @param string    Message
+     */
+    public function sendFax($remote, $message)
+    {
+        $options = array();
+        $options['RemoteUri'] = 'sip:' . $remote . '@sipgate.net';
+        $options['TOS'] = 'fax';
+        $options['Content'] = $message;
+
+        return $this->sendXmlrpcRequest('samurai.SessionInitiate', $options);
+    }
+
+    /**
+     * Returns the account balance
+     */
+    public function getBalance()
     {
         return $this->sendXmlrpcRequest('samurai.BalanceGet');
     }
 
-    public function list_methods()
+    /**
+     * Lists all available methods
+     */
+    public function listMethods()
     {
         return $this->sendXmlrpcRequest('system.listMethods');
     }
 
-    public function method_help($method)
+    /**
+     * Get help for a specified method
+     *
+     * @param string    Method
+     */
+    public function methodHelp($method)
     {
         $options = array();
         $options['MethodeName'] = $method;
         return $this->sendXmlrpcRequest('system.methodHelp', $options);
     }
 
-    public function method_signature($method)
+    /**
+     * Get method signature for a specified method
+     *
+     * @param string    Method
+     */
+    public function methodSignature($method)
     {
         $options = array();
         $options['MethodeName'] = $method;
         return $this->sendXmlrpcRequest('system.methodSignature', $options);
     }
 
-    public function server_info()
+    /**
+     * Returns informations about the server
+     */
+    public function serverInfo()
     {
         return $this->sendXmlrpcRequest('system.serverInfo');
     }
 
-    public function get_event_summary()
+    /**
+     * Returns event summary
+     */
+    public function getEventSummary()
     {
         return $this->sendXmlrpcRequest('samurai.EventSummaryGet');
     }
 
-    public function get_event_list()
+    /**
+     * Returns an event list
+     */
+    public function getEventList()
     {
-        return $this->sendXmlrpcRequest('samurai.EventListGet');
+        $options = array();
+        $options['Limit'] = 0;
+        $options['Offset'] = 0;
+
+        return $this->sendXmlrpcRequest('samurai.EventListGet', $options);
     }
 
-    public function get_history_by_date()
+    /**
+     * Returns history by date
+     */
+    public function getHistoryByDate()
     {
         return $this->sendXmlrpcRequest('samurai.HistoryGetByDate');
     }
 
 
-    public function get_own_uri_list()
+    /**
+     * Returns a list of own URIs
+     */
+    public function getOwnUriList()
     {
         return $this->sendXmlrpcRequest('samurai.OwnUriListGet');
     }
 
-    public function get_label_list()
+    /**
+     * Returns available labels
+     */
+    public function getLabelList()
     {
         return $this->sendXmlrpcRequest('samurai.LabelList');
     }
 
-
-    public function click2Dial($remote, $local)
+    /**
+     * Initiates a session (call)
+     *
+     * @param string    Local number
+     * @param string    Remote number
+     */
+    public function initiateSession($local, $remote)
     {
         $options = array();
-        $options['LocalUri'] = $local;
+        $options['LocalUri'] = 'sip:' . $local . '@sipgate.net'; // @sipgate.de for sipgate user (1440578e8)
         $options['RemoteUri'] = 'sip:' . $remote . '@sipgate.net';
         $options['TOS'] = 'voice';
 
         return $this->sendXmlrpcRequest('samurai.SessionInitiate', $options);
     }
     
-    public function get_session_status($session_id)
+    /**
+     * Get status of specified session
+     *
+     * @param int   Session ID
+     */
+    public function getSessionStatus($session_id)
     {
         $options = array();
         $options['SessionID'] = $session_id;
 
         return $this->sendXmlrpcRequest('samurai.SessionStatusGet', $options);
+    }
+
+    /**
+     * Close session (hangup)
+     *
+     * @param integer   Session ID
+     */
+    public function closeSession($session_id)
+    {
+        $options = array();
+        $options['SessionID'] = $session_id;
+
+        return $this->sendXmlrpcRequest('samurai.SessionClose', $options);
     }
 
 }
