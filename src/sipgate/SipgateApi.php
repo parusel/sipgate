@@ -1,4 +1,4 @@
-<?php
+<?php namespace Sipgate;
 
 /**
  * This class is a wrapper for the Sipgate API
